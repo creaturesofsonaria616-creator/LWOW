@@ -2,16 +2,14 @@ mod app;
 mod store;
 mod tabs;
 mod themes;
-mod webview;
+mod webviews;
 
 fn main() {
     // Lwow startup sequence:
-    // 1. Initialize the data store (SQLite, WAL mode) in the user data dir.
-    // 2. Load settings + active theme.
-    // 3. Launch the Slint UI shell on the main thread (WebView2 requires COM
-    //    init on the UI thread; wry handles this internally).
-    // 4. Session recovery happens before the event loop starts, so a crash on
-    //    last exit restores tabs without blocking startup.
+    // 1. Resolve and create the user data directory (SQLite lives there).
+    // 2. Open the store (WAL mode) and load settings + active theme.
+    // 3. Hand everything to app::run, which instantiates the Slint shell,
+    //    restores the last session, and attaches WebView2 children per tab.
 
     let data_dir = dirs::data_local_dir()
         .expect("could not resolve local data directory")
