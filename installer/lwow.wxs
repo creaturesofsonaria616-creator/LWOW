@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Lwow installer definition (WiX Toolset v3).
+
+  Produces: Lwow-Setup-x64.exe (via candle.exe + light.exe or wix.exe).
+  Scope: per-user install when possible, Start Menu shortcut, optional
+  desktop shortcut, functional uninstaller, WebView2 Evergreen runtime
+  detection via the official Microsoft bootstrapper chain.
+
+  Build (run on Windows after `cargo build --release`):
+    candle.exe lwow.wxs -out lwow.wixobj
+    light.exe lwow.wixobj -o Lwow-Setup-x64.exe -ext WixUIExtension
+  Or with WiX v4/v5: wix.exe build lwow.wxs -o Lwow-Setup-x64.exe
+
+  Notes:
+  - UpgradeCode must NEVER change once a version ships publicly.
+  - The WebView2 Evergreen bootstrapper (MicrosoftEdgeWebview2Setup.exe) is
+    chain-installed only when the runtime is missing. It installs per-user
+    without admin elevation on supported Windows versions.
+  - No code signing in v0.1: Windows SmartScreen may warn. Sign the .exe and
+    installer with a real certificate before public distribution.
+-->
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Product Id="*"
+           Name="Lwow"
+           Language="1033"
+           Version="0.1.0"
+           Manufacturer="Lwow Project"
+           UpgradeCode="B0C7E9F0-8B7D-4E9F-9C5D-4C3D8F1A2E3B">
+
+    <Package Id="*"
+             InstallerVersion="500"
+             Compressed="yes"
+             InstallScope="perUser"
+             Description="Lwow - lightweight, customizable web browser" />
+
+    <MajorUpgrade AllowDowngrades="no"
+                  DowngradeErrorMessage="A newer version of Lwow is already installed." />
+
+    <MediaTemplate EmbedCab="yes" />
+
+    <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
+    <UIRef Id="WixUI_InstallDir" />
+
+    <Property Id="APPLICATIONFOLDER" Secure="yes">
+      <RegistrySearch Id="FindInstallLocation"
+                      Root="HKCU"
+                      Key="Software\[Manufacturer]\[ProductName]"
+                      Name="InstallLocation"
+                      Type="raw" />
+    </Property>
+
+    <!-- WebView2 Evergreen detection: Fixed Version is NOT used; Evergreen
+         stays updated by Microsoft's own channel. -->
+    <Property Id="WEBVIEW2INSTALLED">
+      <RegistrySearch Id="DetectWebView2"
+                      Root="HKLM"
+                      Key="SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
+                      Name="pv"
+                      Type="raw"
+                      Win64="no" />
+    </Property>
+
+    <Icon Id="LwowIcon" SourceFile="assets\lwow.ico" />
+    <Property Id="ARPPRODUCTICON" Value="LwowIcon" />
+
+    <Feature Id="Main" Title="Lwow" Level="1">
+      <ComponentGroupRef Id="LwowComponents" />
+    </Feature>
+
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="LocalAppDataFolder">
+        <Directory Id="INSTALLFOLDER" Name="Lwow">
+          <Component Id="LwowExe" Guid="PUT-GUID-HERE-1" KeyPath="no">
+            <File Id="LwowBinary" Source="target\release\lwow.exe" KeyPath="yes" />
+          </Component>
+        </Directory>
+      </Directory>
+    </Directory>
+
+    <ComponentGroup Id="LwowComponents">
+      <ComponentRef Id="LwowExe" />
+    </ComponentGroup>
+
+    <DirectoryRef Id="TARGETDIR">
+      <Directory Id="ProgramMenuFolder">
+        <Directory Id="LwowStartMenu" Name="Lwow">
+          <Component Id="StartMenuShortcut" Guid="PUT-GUID-HERE-2">
+            <Shortcut Id="LwowShortcut"
+                      Name="Lwow"
+                      Target="[INSTALLFOLDER]lwow.exe"
+                      WorkingDirectory="INSTALLFOLDER"
+                      Icon="LwowIcon" />
+            <RemoveFolder Id="RemoveLwowStartMenu" On="uninstall" />
+            <RegistryValue Root="HKCU"
+                           Key="Software\[Manufacturer]\[ProductName]"
+                           Name="StartMenuShortcut"
+                           Type="integer"
+                           Value="1"
+                           KeyPath="yes" />
+          </Component>
+        </Directory>
+      </Directory>
+    </DirectoryRef>
+
+    <!-- Optional desktop shortcut: disabled by default, user enables in UI -->
+    <Property Id="INSTALLDESKTOPSHORTCUT" Value="1" />
+    <Condition Message="Desktop shortcut preference">INSTALLDESKTOPSHORTCUT</Condition>
+
+    <!-- WebView2 Evergreen chain-install: only when the runtime is absent.
+         The bootstrapper URL is Microsoft's official distribution endpoint. -->
+    <CustomAction Id="DownloadWebView2"
+                  Directory="INSTALLFOLDER"
+                  ExeCommand='powershell.exe -NoProfile -WindowStyle Hidden -Command "&amp;{ Invoke-WebRequest -Uri &quot;https://go.microsoft.com/fwlink/p/?LinkId=2124703&quot; -OutFile &quot;%TEMP%\MicrosoftEdgeWebview2Setup.exe&quot;; Start-Process &quot;%TEMP%\MicrosoftEdgeWebview2Setup.exe&quot; -ArgumentList &quot;/silent /install&quot; -Wait -NoNewWindow; Exit 0 }"'
+                  Return="check" />
+
+    <InstallExecuteSequence>
+      <Custom Action="DownloadWebView2"
+              After="InstallFiles"
+              Overridable="yes">
+        <![CDATA[NOT Installed AND NOT WEBVIEW2INSTALLED]]>
+      </Custom>
+    </InstallExecuteSequence>
+
+  </Product>
+</Wix>

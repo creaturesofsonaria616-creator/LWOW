@@ -1,0 +1,46 @@
+name: Build Lwow Windows
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Build release binary
+        run: cargo build --release
+      - name: Install WiX
+        shell: pwsh
+        run: dotnet tool install --global wix --version 5.*
+      - name: Build installer
+        shell: pwsh
+        run: |
+          $wxs = Get-Content installer/lwow.wxs -Raw
+          $wxs = $wxs -replace 'PUT-GUID-HERE-1', [guid]::NewGuid().ToString()
+          $wxs = $wxs -replace 'PUT-GUID-HERE-2', [guid]::NewGuid().ToString()
+          $wxs = $wxs -replace 'target\\release\\lwow.exe', '..\target\release\lwow.exe'
+          Set-Content installer/lwow.wxs $wxs
+          cd installer
+          wix build lwow.wxs -o Lwow-Setup-x64.exe -arch x64
+          if (-not (Test-Path Lwow-Setup-x64.exe)) { throw "installer not produced" }
+      - name: Generate SHA-256
+        shell: pwsh
+        run: |
+          $hash = (Get-FileHash installer/Lwow-Setup-x64.exe -Algorithm SHA256).Hash
+          "$hash  Lwow-Setup-x64.exe" | Tee-Object lwow-setup.sha256
+      - name: Upload lwow.exe
+        uses: actions/upload-artifact@v4
+        with:
+          name: lwow-exe
+          path: target/release/lwow.exe
+      - name: Upload installer and hash
+        uses: actions/upload-artifact@v4
+        with:
+          name: Lwow-Setup
+          path: |
+            installer/Lwow-Setup-x64.exe
+            lwow-setup.sha256

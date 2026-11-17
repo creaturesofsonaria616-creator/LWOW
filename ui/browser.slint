@@ -1,0 +1,245 @@
+// Lwow browser shell — chrome drawn by Slint; page content is rendered by
+// WebView2 child windows positioned over the content region (src/webviews).
+//
+// Slint 1.19 syntax notes:
+// - Units: px (there is no `dp` unit).
+// - Custom components that need background/border-radius must INHERIT
+//   Rectangle; the implicit root element has no visual properties.
+// - Bare `transparent` is not an identifier; use `Colors.transparent`.
+// - `font-size` is a length (px), not a float.
+
+import { LineEdit } from "std-widgets.slint";
+
+export struct TabData {
+    id: int,
+    title: string,
+    url: string,
+    pinned: bool,
+    loading: bool,
+    playing_audio: bool,
+}
+
+component NavButton inherits Rectangle {
+    in property <string> glyph;
+    in property <length> font-size: 16px;
+    callback clicked();
+
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    background: ta.has-hover ? #1A2129 : Colors.transparent;
+
+    ta := TouchArea {
+        width: 100%;
+        height: 100%;
+        clicked => { root.clicked(); }
+    }
+
+    Text {
+        width: 100%;
+        height: 100%;
+        text: root.glyph;
+        font-size: root.font-size;
+        color: #F4F6F8;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+}
+
+component TabStrip inherits Rectangle {
+    in property <[TabData]> tabs;
+    in property <int> active-index;
+
+    callback open-new-tab();
+    callback close-tab(int);
+    callback select-tab(int);
+
+    height: 40px;
+    background: #0C1117;
+
+    HorizontalLayout {
+        padding: 4px;
+        spacing: 4px;
+        alignment: start;
+
+        for tab[i] in tabs: Rectangle {
+            width: 180px;
+            height: 32px;
+            border-radius: 8px;
+            background: i == active-index
+                ? #1A2129
+                : (ta.has-hover ? #161B22 : Colors.transparent);
+
+            ta := TouchArea {
+                width: 100%;
+                height: 100%;
+                clicked => { root.select-tab(tab.id); }
+            }
+
+            HorizontalLayout {
+                padding-left: 8px;
+                padding-right: 6px;
+                spacing: 6px;
+
+                if tab.playing_audio: Rectangle {
+                    width: 10px;
+                    border-radius: 5px;
+                    background: #7C5CFF;
+                }
+
+                Text {
+                    vertical-alignment: center;
+                    overflow: elide;
+                    color: i == active-index ? #F4F6F8 : #8B95A1;
+                    font-size: 12px;
+                    text: tab.title == "" ? "Nova aba" : tab.title;
+                }
+
+                if !tab.pinned: Rectangle {
+                    width: 20px;
+                    border-radius: 4px;
+                    background: close-ta.has-hover ? #2A323C : Colors.transparent;
+
+                    close-ta := TouchArea {
+                        width: 100%;
+                        height: 100%;
+                        clicked => { root.close-tab(tab.id); }
+                    }
+
+                    Text {
+                        width: 100%;
+                        height: 100%;
+                        text: "×";
+                        font-size: 12px;
+                        color: #8B95A1;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+                }
+            }
+        }
+
+        // New tab button
+        Rectangle {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            background: new-tab-ta.has-hover ? #161B22 : Colors.transparent;
+
+            new-tab-ta := TouchArea {
+                width: 100%;
+                height: 100%;
+                clicked => { root.open-new-tab(); }
+            }
+
+            Text {
+                width: 100%;
+                height: 100%;
+                text: "+";
+                font-size: 18px;
+                color: #8B95A1;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+        }
+    }
+}
+
+component ToolBar inherits Rectangle {
+    in-out property <string> address;
+
+    callback navigate(string);
+    callback go-back();
+    callback go-forward();
+    callback reload();
+
+    height: 44px;
+    background: #0F1419;
+
+    NavButton {
+        x: 8px;
+        y: 6px;
+        glyph: "‹";
+        font-size: 18px;
+        clicked => { root.go-back(); }
+    }
+
+    NavButton {
+        x: 46px;
+        y: 6px;
+        glyph: "›";
+        font-size: 18px;
+        clicked => { root.go-forward(); }
+    }
+
+    NavButton {
+        x: 84px;
+        y: 6px;
+        glyph: "⟳";
+        font-size: 16px;
+        clicked => { root.reload(); }
+    }
+
+    // Omnibar
+    Rectangle {
+        x: 122px;
+        y: 6px;
+        width: parent.width - 130px;
+        height: 32px;
+        border-radius: 16px;
+        background: #10161D;
+        border-width: 1px;
+        border-color: address-input.has-focus ? #7C5CFF : #2A323C;
+
+        address-input := LineEdit {
+            x: 8px;
+            y: 0px;
+            width: parent.width - 16px;
+            height: parent.height;
+            placeholder-text: "Pesquisar ou digitar um endereço";
+            text <=> root.address;
+            accepted(text) => { root.navigate(text); }
+        }
+    }
+}
+
+export component BrowserWindow inherits Window {
+    in-out property <string> address;
+    in property <[TabData]> tabs;
+    in property <int> active-index;
+
+    callback navigate(string);
+    callback go-back();
+    callback go-forward();
+    callback reload();
+    callback open-new-tab();
+    callback close-tab(int);
+    callback select-tab(int);
+
+    title: "Lwow";
+    background: #0F1419;
+    preferred-width: 1280px;
+    preferred-height: 800px;
+
+    VerticalLayout {
+        TabStrip {
+            tabs: root.tabs;
+            active-index: root.active-index;
+            open-new-tab => { root.open-new-tab(); }
+            close-tab(id) => { root.close-tab(id); }
+            select-tab(id) => { root.select-tab(id); }
+        }
+
+        ToolBar {
+            address <=> root.address;
+            navigate(u) => { root.navigate(u); }
+            go-back => { root.go-back(); }
+            go-forward => { root.go-forward(); }
+            reload => { root.reload(); }
+        }
+
+        // Content region: the active tab's WebView2 child is positioned over
+        // this area by the Rust layer (src/webviews). Drawn only as fallback.
+        Rectangle { background: #0B0F13; }
+    }
+}
