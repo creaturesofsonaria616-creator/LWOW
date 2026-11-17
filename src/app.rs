@@ -1,6 +1,7 @@
-//! Application orchestration: state, settings, and the Slint event loop.
+//! Application orchestration: state, settings, themes, and the event loop.
 
 use crate::store::Store;
+use crate::themes::Theme;
 use std::sync::Arc;
 
 #[derive(Debug, Clone)]
@@ -20,14 +21,16 @@ pub enum StartupPage {
 
 pub struct AppState {
     pub store: Arc<Store>,
+    pub theme: Theme,
     pub settings: Settings,
     pub tabs: crate::tabs::TabManager,
 }
 
 impl AppState {
-    pub fn new(store: Store, settings: Settings) -> Self {
+    pub fn new(store: Store, theme: Theme, settings: Settings) -> Self {
         Self {
             store: Arc::new(store),
+            theme,
             settings,
             tabs: crate::tabs::TabManager::new(),
         }
