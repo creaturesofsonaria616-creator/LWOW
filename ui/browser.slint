@@ -1,59 +1,57 @@
-// Lwow browser shell — chrome drawn by Slint; page content is rendered
-// by WebView2 child windows positioned below the toolbar (see src/webview.rs).
-//
-// The `ContentRegion` reserves the area where the active tab's WebView2
-// child window is placed; Slint never draws over it.
+// Lwow browser shell — chrome drawn by Slint; page content is rendered by
+// WebView2 child windows positioned over the content region (src/webviews).
+// NOTE: exported component must INHERIT Window (a Window cannot be a child).
 
-import { Button, LineEdit } from "std-widgets.slint";
+import { LineEdit } from "std-widgets.slint";
+
+struct TabData {
+    id: int,
+    title: string,
+    url: string,
+    pinned: bool,
+    loading: bool,
+    playing_audio: bool,
+}
 
 component TabStrip {
-    in-out property <length> tab-height: 36dp;
-    property <[TabData]> tabs;
+    in property <[TabData]> tabs;
     in property <int> active-index;
-
     callback open-new-tab();
     callback close-tab(int);
     callback select-tab(int);
 
-    struct TabData {
-        title: string,
-        url: string,
-        pinned: bool,
-        loading: bool,
-        playing-audio: bool,
-    }
-
     HorizontalLayout {
         padding: 4dp;
         spacing: 4dp;
+        height: 40dp;
 
         ListView {
             orientation: horizontal;
 
             for tab[i] in tabs: Rectangle {
                 width: 180dp;
-                height: parent.height;
+                height: 32dp;
                 border-radius: 8dp;
                 background: i == active-index
-                    ? @radial-gradient(circle, #1A2129 0%, #151A21 100%)
-                    : touch-area.has-hover ? #161B22 : transparent;
+                    ? #1A2129
+                    : (ta.has-hover ? #161B22 : transparent);
 
-                if tab.playing-audio: Rectangle {
+                ta := TouchArea {
+                    clicked => { root.select-tab(tab.id); }
+                }
+
+                if tab.playing_audio: Rectangle {
                     x: 8dp;
-                    y: (parent.height - 12dp) / 2;
-                    width: 12dp;
-                    height: 12dp;
-                    border-radius: 6dp;
+                    y: (parent.height - 10dp) / 2;
+                    width: 10dp;
+                    height: 10dp;
+                    border-radius: 5dp;
                     background: #7C5CFF;
                 }
 
-                ta := TouchArea {
-                    clicked => { select-tab(i); }
-                }
-
                 Text {
-                    x: tab.pinned ? 26dp : 24dp;
-                    width: parent.width - (tab.pinned ? 44dp : 32dp);
+                    x: 24dp;
+                    width: parent.width - 44dp;
                     vertical-alignment: center;
                     overflow: elide;
                     color: i == active-index ? #F4F6F8 : #8B95A1;
@@ -61,10 +59,25 @@ component TabStrip {
                     text: tab.title == "" ? "Nova aba" : tab.title;
                 }
 
-                if !tab.pinned: CloseIcon {
+                if !tab.pinned: Rectangle {
                     x: parent.width - 24dp;
-                    y: (parent.height - 14dp) / 2;
-                    close-clicked => { close-tab(i); }
+                    y: (parent.height - 16dp) / 2;
+                    width: 16dp;
+                    height: 16dp;
+                    border-radius: 4dp;
+                    background: close-ta.has-hover ? #2A323C : transparent;
+
+                    Text {
+                        text: "×";
+                        font-size: 12px;
+                        color: #8B95A1;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+
+                    close-ta := TouchArea {
+                        clicked => { root.close-tab(tab.id); }
+                    }
                 }
             }
         }
@@ -72,13 +85,8 @@ component TabStrip {
         // New tab button
         Rectangle {
             width: 32dp;
-            height: parent.height;
             border-radius: 8dp;
-            background: new-tab-area.has-hover ? #161B22 : transparent;
-
-            new-tab-area := TouchArea {
-                clicked => { open-new-tab(); }
-            }
+            background: new-tab-ta.has-hover ? #161B22 : transparent;
 
             Text {
                 text: "+";
@@ -87,26 +95,10 @@ component TabStrip {
                 horizontal-alignment: center;
                 vertical-alignment: center;
             }
-        }
-    }
-}
 
-component CloseIcon {
-    callback close-clicked();
-    Rectangle {
-        width: 16dp;
-        height: 16dp;
-        border-radius: 4dp;
-        background: close-area.has-hover ? #2A323C : transparent;
-        Text {
-            text: "×";
-            font-size: 12px;
-            color: #8B95A1;
-            horizontal-alignment: center;
-            vertical-alignment: center;
-        }
-        close-area := TouchArea {
-            clicked => { close-clicked(); }
+            new-tab-ta := TouchArea {
+                clicked => { root.open-new-tab(); }
+            }
         }
     }
 }
@@ -123,10 +115,34 @@ component ToolBar {
         padding: 4dp;
         height: 44dp;
 
-        Button { text: "‹"; enabled: true; clicked => { go-back(); } }
-        Button { text: "›"; enabled: true; clicked => { go-forward(); } }
-        Button { text: "⟳"; clicked => { reload(); } }
+        Rectangle {
+            width: 32dp;
+            height: 32dp;
+            border-radius: 6dp;
+            background: back-ta.has-hover ? #1A2129 : transparent;
+            Text { text: "‹"; font-size: 18px; color: #F4F6F8; horizontal-alignment: center; vertical-alignment: center; }
+            back-ta := TouchArea { clicked => { root.go-back(); } }
+        }
 
+        Rectangle {
+            width: 32dp;
+            height: 32dp;
+            border-radius: 6dp;
+            background: fwd-ta.has-hover ? #1A2129 : transparent;
+            Text { text: "›"; font-size: 18px; color: #F4F6F8; horizontal-alignment: center; vertical-alignment: center; }
+            fwd-ta := TouchArea { clicked => { root.go-forward(); } }
+        }
+
+        Rectangle {
+            width: 32dp;
+            height: 32dp;
+            border-radius: 6dp;
+            background: reload-ta.has-hover ? #1A2129 : transparent;
+            Text { text: "⟳"; font-size: 16px; color: #F4F6F8; horizontal-alignment: center; vertical-alignment: center; }
+            reload-ta := TouchArea { clicked => { root.reload(); } }
+        }
+
+        // Omnibar
         Rectangle {
             border-radius: 999dp;
             background: #10161D;
@@ -140,15 +156,15 @@ component ToolBar {
                 height: 32dp;
                 placeholder-text: "Pesquisar ou digitar um endereço";
                 text <=> root.address;
-                accepted(text) => { navigate(text); }
+                accepted(text) => { root.navigate(text); }
             }
         }
     }
 }
 
-export component BrowserWindow {
+export component BrowserWindow inherits Window {
     in-out property <string> address;
-    in property <[TabStrip.TabData]> tabs;
+    in property <[TabData]> tabs;
     in property <int> active-index;
 
     callback navigate(string);
@@ -159,40 +175,30 @@ export component BrowserWindow {
     callback close-tab(int);
     callback select-tab(int);
 
-    Window {
-        title: "Lwow";
-        background: #0F1419;
-        preferred-width: 1280px;
-        preferred-height: 800px;
+    title: "Lwow";
+    background: #0F1419;
+    preferred-width: 1280px;
+    preferred-height: 800px;
 
-        VerticalLayout {
-            TabStrip {
-                tabs: root.tabs;
-                active-index: root.active-index;
-                open-new-tab => { root.open-new-tab(); }
-                close-tab(i) => { root.close-tab(i); }
-                select-tab(i) => { root.select-tab(i); }
-            }
-
-            ToolBar {
-                address <=> root.address;
-                navigate(url) => { root.navigate(url); }
-                go-back => { root.go-back(); }
-                go-forward => { root.go-forward(); }
-                reload => { root.reload(); }
-            }
-
-            // Region reserved for the WebView2 child window of the active
-            // tab. The Rust layer positions the child HWND over this area.
-            Rectangle {
-                background: #0B0F13;
-                Text {
-                    color: #3D4750;
-                    text: "Conteúdo da página (WebView2)";
-                    horizontal-alignment: center;
-                    vertical-alignment: center;
-                }
-            }
+    VerticalLayout {
+        TabStrip {
+            tabs: root.tabs;
+            active-index: root.active-index;
+            open-new-tab => { root.open-new-tab(); }
+            close-tab(id) => { root.close-tab(id); }
+            select-tab(id) => { root.select-tab(id); }
         }
+
+        ToolBar {
+            address <=> root.address;
+            navigate(u) => { root.navigate(u); }
+            go-back => { root.go-back(); }
+            go-forward => { root.go-forward(); }
+            reload => { root.reload(); }
+        }
+
+        // Content region: the active tab's WebView2 child is positioned over
+        // this area by the Rust layer (src/webviews). Drawn only as fallback.
+        Rectangle { background: #0B0F13; }
     }
 }
