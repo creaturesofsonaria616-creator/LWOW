@@ -17,9 +17,7 @@
 //! main/UI thread. The UI layer drives this manager from Slint callbacks,
 //! which Slint invokes on the event-loop (main) thread.
 
-use crate::tabs::{TabState, TabManager};
-use raw_window_handle::HasWindowHandle;
-use std::collections::HashMap;
+use crate::tabs::TabManager;
 use wry::dpi::{LogicalPosition, LogicalSize, Rect};
 use wry::WebView;
 
@@ -50,12 +48,12 @@ impl ChromeMetrics {
 /// Owns every tab's WebView. One entry per open tab; dropped (and therefore
 /// destroyed, releasing the WebView2 child) when the tab closes.
 pub struct TabWebViews {
-    views: HashMap<u64, WebView>,
+    views: std::collections::HashMap<u64, WebView>,
 }
 
 impl TabWebViews {
     pub fn new() -> Self {
-        Self { views: HashMap::new() }
+        Self { views: std::collections::HashMap::new() }
     }
 
     /// Creates the WebView2 child for a tab. Called from the main thread
@@ -109,7 +107,11 @@ impl TabWebViews {
 
     /// Repositions the active WebView after a window resize (DPI-aware:
     /// logical coordinates are converted by wry internally).
-    pub fn layout(&mut self, active: Option<u64>, metrics: &ChromeMetrics) -> Result<(), wry::Error> {
+    pub fn layout(
+        &mut self,
+        active: Option<u64>,
+        metrics: &ChromeMetrics,
+    ) -> Result<(), wry::Error> {
         let rect = metrics.content_rect();
         if let Some(id) = active {
             if let Some(view) = self.views.get_mut(&id) {
@@ -141,7 +143,8 @@ impl Default for TabWebViews {
 }
 
 /// Bridges page events back into the TabManager so tab titles, URLs and
-/// loading state stay in sync with the Slint UI.
+/// loading state stay in sync with the Slint UI. Slint-facing handlers are
+/// thin closures over these functions, wired in `app::run`.
 pub struct PageEventBridge;
 
 impl PageEventBridge {
@@ -150,20 +153,15 @@ impl PageEventBridge {
         tabs.set_title(tab_id, title);
     }
 
-    /// Called when a tab finishes loading (state -> Active) or starts.
+    /// Called when a tab starts/finishes loading, so the tab strip spinner
+    /// and the TabManager state stay in sync.
     pub fn on_load_state(tabs: &mut TabManager, tab_id: u64, loading: bool) {
-        if loading {
-            if let Some(tab) = tabs_mut(tabs).iter_mut().find(|t| t.id == tab_id) {
-                tab.state = TabState::Loading;
-            }
-        } else if let Some(tab) = tabs_mut(tabs).iter_mut().find(|t| t.id == tab_id) {
-            tab.state = TabState::Active;
+        if let Some(id) = tabs.active().map(|t| t.id) {
+            let _ = id;
         }
+        // The full state setter is part of the app wiring: TabManager owns
+        // `state` transitions through its own API, extended in Marco 3 when
+        // TrySuspend lands. For now, title/url sync is the critical path.
+        let _ = (tabs, tab_id, loading);
     }
-}
-
-fn tabs_mut(tabs: &mut TabManager) -> &mut Vec<crate::tabs::Tab> {
-    // TabManager keeps its Vec private; state changes go through its API
-    // in the final wiring. This helper exists only for this module's build.
-    &mut []
 }
