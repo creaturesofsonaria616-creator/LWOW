@@ -1,10 +1,16 @@
 // Lwow browser shell — chrome drawn by Slint; page content is rendered by
 // WebView2 child windows positioned over the content region (src/webviews).
-// NOTE: exported component must INHERIT Window (a Window cannot be a child).
+//
+// Slint 1.19 syntax notes:
+// - Units: px (there is no `dp` unit).
+// - No ListView here: the tab strip uses a HorizontalLayout with `for` and
+//   alignment: start, which is simpler and overflow-safe for v0.1.
+// - Length arithmetic avoids division (length/int yields float); centering
+//   uses layouts or fixed offsets.
 
 import { LineEdit } from "std-widgets.slint";
 
-struct TabData {
+export struct TabData {
     id: int,
     title: string,
     url: string,
@@ -13,45 +19,69 @@ struct TabData {
     playing_audio: bool,
 }
 
+component NavButton {
+    in property <string> glyph;
+    in property <float> font-size: 16px;
+    callback clicked();
+
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    background: ta.has-hover ? #1A2129 : transparent;
+
+    ta := TouchArea {
+        clicked => { root.clicked(); }
+    }
+
+    Text {
+        text: root.glyph;
+        font-size: root.font-size;
+        color: #F4F6F8;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+}
+
 component TabStrip {
     in property <[TabData]> tabs;
     in property <int> active-index;
+
     callback open-new-tab();
     callback close-tab(int);
     callback select-tab(int);
 
+    height: 40px;
+    background: #0C1117;
+
     HorizontalLayout {
-        padding: 4dp;
-        spacing: 4dp;
-        height: 40dp;
+        padding: 4px;
+        spacing: 4px;
+        alignment: start;
 
-        ListView {
-            orientation: horizontal;
+        for tab[i] in tabs: Rectangle {
+            width: 180px;
+            height: 32px;
+            border-radius: 8px;
+            background: i == active-index
+                ? #1A2129
+                : (ta.has-hover ? #161B22 : transparent);
 
-            for tab[i] in tabs: Rectangle {
-                width: 180dp;
-                height: 32dp;
-                border-radius: 8dp;
-                background: i == active-index
-                    ? #1A2129
-                    : (ta.has-hover ? #161B22 : transparent);
+            ta := TouchArea {
+                clicked => { root.select-tab(tab.id); }
+            }
 
-                ta := TouchArea {
-                    clicked => { root.select-tab(tab.id); }
-                }
+            HorizontalLayout {
+                padding-left: 8px;
+                padding-right: 6px;
+                spacing: 6px;
 
                 if tab.playing_audio: Rectangle {
-                    x: 8dp;
-                    y: (parent.height - 10dp) / 2;
-                    width: 10dp;
-                    height: 10dp;
-                    border-radius: 5dp;
+                    width: 10px;
+                    border-radius: 5px;
                     background: #7C5CFF;
                 }
 
                 Text {
-                    x: 24dp;
-                    width: parent.width - 44dp;
                     vertical-alignment: center;
                     overflow: elide;
                     color: i == active-index ? #F4F6F8 : #8B95A1;
@@ -60,12 +90,13 @@ component TabStrip {
                 }
 
                 if !tab.pinned: Rectangle {
-                    x: parent.width - 24dp;
-                    y: (parent.height - 16dp) / 2;
-                    width: 16dp;
-                    height: 16dp;
-                    border-radius: 4dp;
+                    width: 20px;
+                    border-radius: 4px;
                     background: close-ta.has-hover ? #2A323C : transparent;
+
+                    close-ta := TouchArea {
+                        clicked => { root.close-tab(tab.id); }
+                    }
 
                     Text {
                         text: "×";
@@ -74,19 +105,20 @@ component TabStrip {
                         horizontal-alignment: center;
                         vertical-alignment: center;
                     }
-
-                    close-ta := TouchArea {
-                        clicked => { root.close-tab(tab.id); }
-                    }
                 }
             }
         }
 
         // New tab button
         Rectangle {
-            width: 32dp;
-            border-radius: 8dp;
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
             background: new-tab-ta.has-hover ? #161B22 : transparent;
+
+            new-tab-ta := TouchArea {
+                clicked => { root.open-new-tab(); }
+            }
 
             Text {
                 text: "+";
@@ -95,69 +127,64 @@ component TabStrip {
                 horizontal-alignment: center;
                 vertical-alignment: center;
             }
-
-            new-tab-ta := TouchArea {
-                clicked => { root.open-new-tab(); }
-            }
         }
     }
 }
 
 component ToolBar {
     in-out property <string> address;
+
     callback navigate(string);
     callback go-back();
     callback go-forward();
     callback reload();
 
-    HorizontalLayout {
-        spacing: 6dp;
-        padding: 4dp;
-        height: 44dp;
+    height: 44px;
+    background: #0F1419;
 
-        Rectangle {
-            width: 32dp;
-            height: 32dp;
-            border-radius: 6dp;
-            background: back-ta.has-hover ? #1A2129 : transparent;
-            Text { text: "‹"; font-size: 18px; color: #F4F6F8; horizontal-alignment: center; vertical-alignment: center; }
-            back-ta := TouchArea { clicked => { root.go-back(); } }
-        }
+    NavButton {
+        x: 8px;
+        y: 6px;
+        glyph: "‹";
+        font-size: 18px;
+        clicked => { root.go-back(); }
+    }
 
-        Rectangle {
-            width: 32dp;
-            height: 32dp;
-            border-radius: 6dp;
-            background: fwd-ta.has-hover ? #1A2129 : transparent;
-            Text { text: "›"; font-size: 18px; color: #F4F6F8; horizontal-alignment: center; vertical-alignment: center; }
-            fwd-ta := TouchArea { clicked => { root.go-forward(); } }
-        }
+    NavButton {
+        x: 46px;
+        y: 6px;
+        glyph: "›";
+        font-size: 18px;
+        clicked => { root.go-forward(); }
+    }
 
-        Rectangle {
-            width: 32dp;
-            height: 32dp;
-            border-radius: 6dp;
-            background: reload-ta.has-hover ? #1A2129 : transparent;
-            Text { text: "⟳"; font-size: 16px; color: #F4F6F8; horizontal-alignment: center; vertical-alignment: center; }
-            reload-ta := TouchArea { clicked => { root.reload(); } }
-        }
+    NavButton {
+        x: 84px;
+        y: 6px;
+        glyph: "⟳";
+        font-size: 16px;
+        clicked => { root.reload(); }
+    }
 
-        // Omnibar
-        Rectangle {
-            border-radius: 999dp;
-            background: #10161D;
-            border-width: 1dp;
-            border-color: address-input.has-focus ? #7C5CFF : #2A323C;
+    // Omnibar
+    Rectangle {
+        x: 122px;
+        y: 6px;
+        width: parent.width - 130px;
+        height: 32px;
+        border-radius: 16px;
+        background: #10161D;
+        border-width: 1px;
+        border-color: address-input.has-focus ? #7C5CFF : #2A323C;
 
-            address-input := LineEdit {
-                x: 12dp;
-                width: parent.width - 24dp;
-                y: (parent.height - 32dp) / 2;
-                height: 32dp;
-                placeholder-text: "Pesquisar ou digitar um endereço";
-                text <=> root.address;
-                accepted(text) => { root.navigate(text); }
-            }
+        address-input := LineEdit {
+            x: 8px;
+            y: 0px;
+            width: parent.width - 16px;
+            height: parent.height;
+            placeholder-text: "Pesquisar ou digitar um endereço";
+            text <=> root.address;
+            accepted(text) => { root.navigate(text); }
         }
     }
 }
