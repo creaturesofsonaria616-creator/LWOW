@@ -4,6 +4,7 @@
 use crate::store::Store;
 use crate::themes::Theme;
 use crate::webviews::{ChromeMetrics, TabWebViews};
+use slint::{ComponentHandle, Weak};
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -79,8 +80,9 @@ fn normalize_omnibar(input: &str) -> String {
     if input.is_empty() {
         return String::new();
     }
-    let looks_like_url =
-        input.contains("://") || input.starts_with("localhost") || (input.contains('.') && !input.contains(' '));
+    let looks_like_url = input.contains("://")
+        || input.starts_with("localhost")
+        || (input.contains('.') && !input.contains(' '));
     if looks_like_url {
         if input.contains("://") {
             input.to_string()
@@ -111,7 +113,7 @@ struct SharedRuntime {
     views: TabWebViews,
 }
 
-fn sync_tabs(ui: &slint::Weak<BrowserWindow>, rt: &SharedRuntime) {
+fn sync_tabs(ui: &Weak<BrowserWindow>, rt: &SharedRuntime) {
     if let Some(ui) = ui.upgrade() {
         let rows: Vec<TabData> = rt
             .tabs
@@ -126,7 +128,8 @@ fn sync_tabs(ui: &slint::Weak<BrowserWindow>, rt: &SharedRuntime) {
                 playing_audio: t.is_playing_audio,
             })
             .collect();
-        ui.set_tabs(rows.into());
+        // ModelRc accepts Rc<VecModel<T>>, not Vec<T> directly.
+        ui.set_tabs(slint::VecModel::from(rows).into());
         if let Some(active) = rt.tabs.active() {
             let idx = rt
                 .tabs
@@ -143,9 +146,6 @@ pub fn run(state: AppState) {
     let AppState { store, theme: _theme, settings, mut tabs } = state;
 
     let ui = BrowserWindow::new().expect("failed to instantiate Slint shell");
-    ui.window().on_close_requested(|| {
-        slint::CloseRequestResponse::hide_and_stop_event_loop()
-    });
 
     let shared = Rc::new(RefCell::new(SharedRuntime { tabs, views: TabWebViews::new() }));
 
@@ -220,31 +220,24 @@ pub fn run(state: AppState) {
     let weak = ui.as_weak();
     let s = shared.clone();
     let timer = slint::Timer::default();
-    {
-        let mut timer = timer;
-        timer.start(
-            slint::TimerMode::Repeated,
-            std::time::Duration::from_millis(100),
-            move || {
-                let Ok(ui) = weak.upgrade() else { return };
-                let size = ui.window().size();
-                let metrics = ChromeMetrics {
-                    tab_strip_height: 40.0,
-                    toolbar_height: 44.0,
-                    window_width: size.width as f64,
-                    window_height: size.height as f64,
-                };
-                let mut rt = s.borrow_mut();
-                for tab in rt.tabs.tabs().to_vec() {
-                    if !rt.views.is_attached(tab.id) {
-                        let _ = rt.views.attach(tab.id, &tab.url, &ui.window(), &metrics);
-                    }
-                }
-                let active = rt.tabs.active().map(|t| t.id);
-                let _ = rt.views.layout(active, &metrics);
-            },
-        );
-    }
+    timer.start(slint::TimerMode::Repeated, std::time::Duration::from_millis(100), move || {
+        let Some(ui) = weak.upgrade() else { return };
+        let size = ui.window().size();
+        let metrics = ChromeMetrics {
+            tab_strip_height: 40.0,
+            toolbar_height: 44.0,
+            window_width: size.width as f64,
+            window_height: size.height as f64,
+        };
+        let mut rt = s.borrow_mut();
+        for tab in rt.tabs.tabs().to_vec() {
+            if !rt.views.is_attached(tab.id) {
+                let _ = rt.views.attach(tab.id, &tab.url, &ui.window(), &metrics);
+            }
+        }
+        let active = rt.tabs.active().map(|t| t.id);
+        let _ = rt.views.layout(active, &metrics);
+    });
 
     // Persist window geometry on close.
     let store_close = store.clone();
@@ -256,7 +249,7 @@ pub fn run(state: AppState) {
                 store_close.set_f64("settings.window_width", size.width as f64);
                 store_close.set_f64("settings.window_height", size.height as f64);
             }
-            slint::CloseRequestResponse::hide_and_stop_event_loop()
+            slint::CloseRequestResponse::HideWindow
         });
     }
 
