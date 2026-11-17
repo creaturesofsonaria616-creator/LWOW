@@ -3,10 +3,10 @@
 //
 // Slint 1.19 syntax notes:
 // - Units: px (there is no `dp` unit).
-// - No ListView here: the tab strip uses a HorizontalLayout with `for` and
-//   alignment: start, which is simpler and overflow-safe for v0.1.
-// - Length arithmetic avoids division (length/int yields float); centering
-//   uses layouts or fixed offsets.
+// - Custom components that need background/border-radius must INHERIT
+//   Rectangle; the implicit root element has no visual properties.
+// - Bare `transparent` is not an identifier; use `Colors.transparent`.
+// - `font-size` is a length (px), not a float.
 
 import { LineEdit } from "std-widgets.slint";
 
@@ -19,21 +19,25 @@ export struct TabData {
     playing_audio: bool,
 }
 
-component NavButton {
+component NavButton inherits Rectangle {
     in property <string> glyph;
-    in property <float> font-size: 16px;
+    in property <length> font-size: 16px;
     callback clicked();
 
     width: 32px;
     height: 32px;
     border-radius: 6px;
-    background: ta.has-hover ? #1A2129 : transparent;
+    background: ta.has-hover ? #1A2129 : Colors.transparent;
 
     ta := TouchArea {
+        width: 100%;
+        height: 100%;
         clicked => { root.clicked(); }
     }
 
     Text {
+        width: 100%;
+        height: 100%;
         text: root.glyph;
         font-size: root.font-size;
         color: #F4F6F8;
@@ -42,7 +46,7 @@ component NavButton {
     }
 }
 
-component TabStrip {
+component TabStrip inherits Rectangle {
     in property <[TabData]> tabs;
     in property <int> active-index;
 
@@ -64,9 +68,11 @@ component TabStrip {
             border-radius: 8px;
             background: i == active-index
                 ? #1A2129
-                : (ta.has-hover ? #161B22 : transparent);
+                : (ta.has-hover ? #161B22 : Colors.transparent);
 
             ta := TouchArea {
+                width: 100%;
+                height: 100%;
                 clicked => { root.select-tab(tab.id); }
             }
 
@@ -92,13 +98,17 @@ component TabStrip {
                 if !tab.pinned: Rectangle {
                     width: 20px;
                     border-radius: 4px;
-                    background: close-ta.has-hover ? #2A323C : transparent;
+                    background: close-ta.has-hover ? #2A323C : Colors.transparent;
 
                     close-ta := TouchArea {
+                        width: 100%;
+                        height: 100%;
                         clicked => { root.close-tab(tab.id); }
                     }
 
                     Text {
+                        width: 100%;
+                        height: 100%;
                         text: "×";
                         font-size: 12px;
                         color: #8B95A1;
@@ -114,13 +124,17 @@ component TabStrip {
             width: 32px;
             height: 32px;
             border-radius: 8px;
-            background: new-tab-ta.has-hover ? #161B22 : transparent;
+            background: new-tab-ta.has-hover ? #161B22 : Colors.transparent;
 
             new-tab-ta := TouchArea {
+                width: 100%;
+                height: 100%;
                 clicked => { root.open-new-tab(); }
             }
 
             Text {
+                width: 100%;
+                height: 100%;
                 text: "+";
                 font-size: 18px;
                 color: #8B95A1;
@@ -131,7 +145,7 @@ component TabStrip {
     }
 }
 
-component ToolBar {
+component ToolBar inherits Rectangle {
     in-out property <string> address;
 
     callback navigate(string);
