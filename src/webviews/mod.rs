@@ -5,29 +5,27 @@
 //! over the content region. Inactive tabs stay hidden but loaded, so tab
 //! switching is instant. Marco 3 adds TrySuspend for idle tabs.
 //!
-//! Verified API surface (docs.rs, 2026-11-17):
-//! - wry 0.57.2: WebViewBuilder::new().with_url(..).with_bounds(Rect{..})
-//!   .build_as_child(&handle); WebView: load_url, set_bounds, set_visible.
-//! - slint 1.13 (feature raw-window-handle-06): Window::window_handle()
-//!   returns a WindowHandle implementing HasWindowHandle 0.6. The handle
-//!   only becomes available after the window is shown and the event loop
-//!   has run at least once.
+//! Verified API surface (docs.rs wry 0.57.2, 2026-11-17):
+//! - `wry::Rect { position: wry::dpi::Position, size: wry::dpi::Size }`
+//!   (Rect lives at the wry ROOT, not in wry::dpi)
+//! - `wry::raw_window_handle::HasWindowHandle` (wry re-exports the crate)
+//! - `WebViewBuilder::new().with_url(..).with_bounds(rect)
+//!   .with_visible(bool).build_as_child(&window)`
+//! - WebView: `load_url`, `set_bounds`, `set_visible`
 //!
 //! NOTE: WebViewBuilder is !Send; all WebView lifecycle calls stay on the
 //! main/UI thread (Slint callbacks and timers run there).
 
 use crate::tabs::TabManager;
-use raw_window_handle::HasWindowHandle;
 use std::collections::HashMap;
-use wry::dpi::{LogicalPosition, LogicalSize, Rect};
-use wry::WebView;
+use wry::dpi::{LogicalPosition, LogicalSize, Position, Size};
+use wry::raw_window_handle::HasWindowHandle;
+use wry::{Rect, WebView, WebViewBuilder};
 
 #[derive(Debug, thiserror::Error)]
 pub enum WebviewError {
     #[error("wry error: {0}")]
     Wry(#[from] wry::Error),
-    #[error("native window handle unavailable (window not shown yet)")]
-    NoHandle,
 }
 
 /// Chrome metrics (logical px) reported by the Slint shell, so the WebView2
@@ -45,8 +43,11 @@ impl ChromeMetrics {
     pub fn content_rect(&self) -> Rect {
         let top = self.tab_strip_height + self.toolbar_height;
         Rect {
-            position: LogicalPosition::new(0.0, top).into(),
-            size: LogicalSize::new(self.window_width, (self.window_height - top).max(0.0)).into(),
+            position: Position::Logical(LogicalPosition::new(0.0, top)),
+            size: Size::Logical(LogicalSize::new(
+                self.window_width,
+                (self.window_height - top).max(0.0),
+            )),
         }
     }
 }
@@ -62,9 +63,7 @@ impl TabWebViews {
         Self { views: HashMap::new() }
     }
 
-    /// Creates the WebView2 child for a tab. Main-thread only. Fails with
-    /// NoHandle if the Slint window HWND is not created yet; the caller
-    /// retries from a UI timer.
+    /// Creates the WebView2 child for a tab. Main-thread only.
     pub fn attach(
         &mut self,
         tab_id: u64,
@@ -115,11 +114,7 @@ impl TabWebViews {
     }
 
     /// Repositions the active WebView after window resize (DPI-aware).
-    pub fn layout(
-        &mut self,
-        active: Option<u64>,
-        metrics: &ChromeMetrics,
-    ) -> Result<(), wry::Error> {
+    pub fn layout(&mut self, active: Option<u64>, metrics: &ChromeMetrics) -> Result<(), wry::Error> {
         let rect = metrics.content_rect();
         if let Some(id) = active {
             if let Some(view) = self.views.get_mut(&id) {
@@ -150,9 +145,7 @@ impl Default for TabWebViews {
 }
 
 /// Bridges page events back into the TabManager so tab titles, URLs and
-/// loading state stay in sync with the Slint UI. Wired into wry handlers
-/// (with_document_title_changed_handler, with_on_page_load_handler) in
-/// app::run.
+/// loading state stay in sync with the Slint UI.
 pub struct PageEventBridge;
 
 impl PageEventBridge {
