@@ -79,6 +79,13 @@ impl TabManager {
         }
     }
 
+    /// Marks the load state of a tab (spinner in the tab strip).
+    pub fn set_state(&mut self, id: u64, state: TabState) {
+        if let Some(tab) = self.tabs.iter_mut().find(|t| t.id == id) {
+            tab.state = state;
+        }
+    }
+
     pub fn tabs(&self) -> &[Tab] {
         &self.tabs
     }
