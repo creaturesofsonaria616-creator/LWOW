@@ -1,0 +1,198 @@
+// Lwow browser shell — chrome drawn by Slint; page content is rendered
+// by WebView2 child windows positioned below the toolbar (see src/webview.rs).
+//
+// The `ContentRegion` reserves the area where the active tab's WebView2
+// child window is placed; Slint never draws over it.
+
+import { Button, LineEdit } from "std-widgets.slint";
+
+component TabStrip {
+    in-out property <length> tab-height: 36dp;
+    property <[TabData]> tabs;
+    in property <int> active-index;
+
+    callback open-new-tab();
+    callback close-tab(int);
+    callback select-tab(int);
+
+    struct TabData {
+        title: string,
+        url: string,
+        pinned: bool,
+        loading: bool,
+        playing-audio: bool,
+    }
+
+    HorizontalLayout {
+        padding: 4dp;
+        spacing: 4dp;
+
+        ListView {
+            orientation: horizontal;
+
+            for tab[i] in tabs: Rectangle {
+                width: 180dp;
+                height: parent.height;
+                border-radius: 8dp;
+                background: i == active-index
+                    ? @radial-gradient(circle, #1A2129 0%, #151A21 100%)
+                    : touch-area.has-hover ? #161B22 : transparent;
+
+                if tab.playing-audio: Rectangle {
+                    x: 8dp;
+                    y: (parent.height - 12dp) / 2;
+                    width: 12dp;
+                    height: 12dp;
+                    border-radius: 6dp;
+                    background: #7C5CFF;
+                }
+
+                ta := TouchArea {
+                    clicked => { select-tab(i); }
+                }
+
+                Text {
+                    x: tab.pinned ? 26dp : 24dp;
+                    width: parent.width - (tab.pinned ? 44dp : 32dp);
+                    vertical-alignment: center;
+                    overflow: elide;
+                    color: i == active-index ? #F4F6F8 : #8B95A1;
+                    font-size: 12px;
+                    text: tab.title == "" ? "Nova aba" : tab.title;
+                }
+
+                if !tab.pinned: CloseIcon {
+                    x: parent.width - 24dp;
+                    y: (parent.height - 14dp) / 2;
+                    close-clicked => { close-tab(i); }
+                }
+            }
+        }
+
+        // New tab button
+        Rectangle {
+            width: 32dp;
+            height: parent.height;
+            border-radius: 8dp;
+            background: new-tab-area.has-hover ? #161B22 : transparent;
+
+            new-tab-area := TouchArea {
+                clicked => { open-new-tab(); }
+            }
+
+            Text {
+                text: "+";
+                font-size: 18px;
+                color: #8B95A1;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+        }
+    }
+}
+
+component CloseIcon {
+    callback close-clicked();
+    Rectangle {
+        width: 16dp;
+        height: 16dp;
+        border-radius: 4dp;
+        background: close-area.has-hover ? #2A323C : transparent;
+        Text {
+            text: "×";
+            font-size: 12px;
+            color: #8B95A1;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+        }
+        close-area := TouchArea {
+            clicked => { close-clicked(); }
+        }
+    }
+}
+
+component ToolBar {
+    in-out property <string> address;
+    callback navigate(string);
+    callback go-back();
+    callback go-forward();
+    callback reload();
+
+    HorizontalLayout {
+        spacing: 6dp;
+        padding: 4dp;
+        height: 44dp;
+
+        Button { text: "‹"; enabled: true; clicked => { go-back(); } }
+        Button { text: "›"; enabled: true; clicked => { go-forward(); } }
+        Button { text: "⟳"; clicked => { reload(); } }
+
+        Rectangle {
+            border-radius: 999dp;
+            background: #10161D;
+            border-width: 1dp;
+            border-color: address-input.has-focus ? #7C5CFF : #2A323C;
+
+            address-input := LineEdit {
+                x: 12dp;
+                width: parent.width - 24dp;
+                y: (parent.height - 32dp) / 2;
+                height: 32dp;
+                placeholder-text: "Pesquisar ou digitar um endereço";
+                text <=> root.address;
+                accepted(text) => { navigate(text); }
+            }
+        }
+    }
+}
+
+export component BrowserWindow {
+    in-out property <string> address;
+    in property <[TabStrip.TabData]> tabs;
+    in property <int> active-index;
+
+    callback navigate(string);
+    callback go-back();
+    callback go-forward();
+    callback reload();
+    callback open-new-tab();
+    callback close-tab(int);
+    callback select-tab(int);
+
+    Window {
+        title: "Lwow";
+        background: #0F1419;
+        preferred-width: 1280px;
+        preferred-height: 800px;
+
+        VerticalLayout {
+            TabStrip {
+                tabs: root.tabs;
+                active-index: root.active-index;
+                open-new-tab => { root.open-new-tab(); }
+                close-tab(i) => { root.close-tab(i); }
+                select-tab(i) => { root.select-tab(i); }
+            }
+
+            ToolBar {
+                address <=> root.address;
+                navigate(url) => { root.navigate(url); }
+                go-back => { root.go-back(); }
+                go-forward => { root.go-forward(); }
+                reload => { root.reload(); }
+            }
+
+            // Region reserved for the WebView2 child window of the active
+            // tab. The Rust layer positions the child HWND over this area.
+            Rectangle {
+                background: #0B0F13;
+                Text {
+                    color: #3D4750;
+                    text: "Conteúdo da página (WebView2)";
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+            }
+        }
+    }
+}
